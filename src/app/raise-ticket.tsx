@@ -12,15 +12,16 @@
 // import * as ImagePicker from 'expo-image-picker';
 // import { Theme } from '../constants/theme';
 // import { api } from '../services/api';
+// import { useTickets } from '../context/TicketContext'; // Context added
 
 // type AttachedFile = { uri: string; data: string; type: string; name: string };
 // const MAX_FILES = 3;
 
 // export default function RaiseTicketScreen({ onClose }: { onClose?: (refresh?: boolean) => void }) {
 //   const [user, setUser] = useState<any>(null);
-//   const [locations, setLocations] = useState<string[]>([]);
-//   const [pcs, setPcs] = useState<string[]>([]);
-//   const [solvers, setSolvers] = useState<string[]>([]);
+  
+//   // States consumed from TicketContext
+//   const { dropdowns, loadingDropdowns, fetchDropdowns, clearCache } = useTickets();
 
 //   const [selectedLoc, setSelectedLoc] = useState('');
 //   const [selectedPC, setSelectedPC] = useState('');
@@ -33,7 +34,6 @@
 //   const [desiredDateStr, setDesiredDateStr] = useState('');
 //   const [showDatePicker, setShowDatePicker] = useState(false);
 
-//   const [loadingDropdowns, setLoadingDropdowns] = useState(true);
 //   const [submitting, setSubmitting] = useState(false);
 //   const submitLock = useRef(false);
 
@@ -92,16 +92,11 @@
 //     if (stored) {
 //       const u = JSON.parse(stored);
 //       setUser(u);
-//       const res = await api.getDropdowns();
-//       if (res && res.success) {
-//         setLocations(res.locations || []);
-//         setPcs(res.pcs || []);
-//         setSolvers((res.solvers || []).filter((s: string) => s !== u.name));
-//       }
+//       // Fetches instantly from context cache
+//       await fetchDropdowns(false); 
 //     } else {
 //       router.replace('/login');
 //     }
-//     setLoadingDropdowns(false);
 //   };
 
 //   const openSearchModal = (field: 'loc' | 'pc' | 'solver', title: string, data: string[]) => {
@@ -189,6 +184,7 @@
 //     try {
 //       const res = await api.createTicket(payload);
 //       if (res && res.success) {
+//         clearCache(); // 🔥 Clears context ticket caches instantly so dashboard loads fresh list on return
 //         showCustomAlert(
 //           'Success!',
 //           `Ticket Created: ${res.ticketId}`,
@@ -240,6 +236,9 @@
 //   const alertColor = alertType === 'success' ? '#10B981' : alertType === 'error' ? '#EF4444' : Theme.colors.primary;
 //   const alertBg = alertType === 'success' ? '#ECFDF5' : alertType === 'error' ? '#FEF2F2' : '#EFF6FF';
 
+//   // Filter solver options to exclude current user
+//   const solverList = dropdowns.solvers.filter((s: string) => s !== user?.name);
+
 //   return (
 //     <SafeAreaView style={[styles.safeArea, isModalView && { backgroundColor: 'transparent' }]}>
 //       <View style={[styles.webOuterContainer, isModalView && { backgroundColor: 'transparent' }]}>
@@ -267,11 +266,11 @@
 //             </View>
 
 //             {renderDropdown('LOCATION *', 'location-outline', selectedLoc, 'Select Location',
-//               () => openSearchModal('loc', 'Select Location', locations))}
+//               () => openSearchModal('loc', 'Select Location', dropdowns.locations))}
 //             {renderDropdown('PC ASSIGNED *', 'person-outline', selectedPC, 'Select PC Assigned',
-//               () => openSearchModal('pc', 'Select PC Assigned', pcs))}
+//               () => openSearchModal('pc', 'Select PC Assigned', dropdowns.pcs))}
 //             {renderDropdown('PROBLEM SOLVER *', 'build-outline', selectedSolver, 'Select Problem Solver',
-//               () => openSearchModal('solver', 'Select Problem Solver', solvers))}
+//               () => openSearchModal('solver', 'Select Problem Solver', solverList))}
 
 //             <View style={styles.formGroup}>
 //               <Text style={styles.label}>PRIORITY</Text>
@@ -431,7 +430,7 @@
 //               <Ionicons name={alertIcon as any} size={42} color={alertColor} />
 //             </View>
 //             <Text style={styles.alertTitle}>{alertTitle}</Text>
-//             <Text style={styles.alertMessage}>{alertMsg}</Text>
+//            <Text style={styles.alertMessage}>{alertMsg}</Text>
 //             <TouchableOpacity
 //               style={[styles.alertOkBtn, { backgroundColor: alertColor }]}
 //               onPress={closeCustomAlert}
@@ -446,6 +445,7 @@
 //   );
 // }
 
+// // ... Stylings remain identical to preserve CSS exactly as provided ...
 // const styles = StyleSheet.create({
 //   safeArea: { flex: 1, backgroundColor: Theme.colors.background },
 //   webOuterContainer: { flex: 1, alignItems: 'center', backgroundColor: Theme.colors.background },
@@ -525,7 +525,6 @@
 //   emptySearch: { padding: 30, alignItems: 'center' },
 //   emptySearchText: { color: Theme.colors.textMuted, fontSize: 14 },
 
-//   // Custom Alert
 //   alertOverlay: {
 //     flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', padding: 24,
 //   },
@@ -555,24 +554,22 @@ import React, { useEffect, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
   ScrollView, SafeAreaView, ActivityIndicator, Modal,
-  FlatList, Platform, Image
+  FlatList, Platform, Image, Linking
 } from 'react-native';
 import { router } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker'; // ✅ ImagePicker ki jagah ye
 import { Theme } from '../constants/theme';
 import { api } from '../services/api';
-import { useTickets } from '../context/TicketContext'; // Context added
+import { useTickets } from '../context/TicketContext';
 
 type AttachedFile = { uri: string; data: string; type: string; name: string };
 const MAX_FILES = 3;
 
 export default function RaiseTicketScreen({ onClose }: { onClose?: (refresh?: boolean) => void }) {
   const [user, setUser] = useState<any>(null);
-  
-  // States consumed from TicketContext
   const { dropdowns, loadingDropdowns, fetchDropdowns, clearCache } = useTickets();
 
   const [selectedLoc, setSelectedLoc] = useState('');
@@ -644,8 +641,7 @@ export default function RaiseTicketScreen({ onClose }: { onClose?: (refresh?: bo
     if (stored) {
       const u = JSON.parse(stored);
       setUser(u);
-      // Fetches instantly from context cache
-      await fetchDropdowns(false); 
+      await fetchDropdowns(false);
     } else {
       router.replace('/login');
     }
@@ -675,32 +671,83 @@ export default function RaiseTicketScreen({ onClose }: { onClose?: (refresh?: bo
     if (selectedDate) formatAndSetDate(selectedDate);
   };
 
-  const pickImages = async () => {
+  // ✅ NEW: PDF + CSV + Images sab allow
+  const pickFiles = async () => {
     if (files.length >= MAX_FILES) {
-      showCustomAlert('Limit', `Maximum ${MAX_FILES} images allowed.`, 'info');
+      showCustomAlert('Limit', `Maximum ${MAX_FILES} files allowed.`, 'info');
       return;
     }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsMultipleSelection: true,
-      selectionLimit: MAX_FILES - files.length,
-      base64: true,
-      quality: 0.5,
-    });
-    if (result.canceled) return;
 
-    const picked: AttachedFile[] = result.assets
-      .filter((a) => !!a.base64)
-      .map((a, i) => ({
-        uri: a.uri,
-        data: a.base64 as string,
-        type: a.mimeType || 'image/jpeg',
-        name: a.fileName || `issue_${Date.now()}_${i}.jpg`,
-      }));
-    setFiles((prev) => [...prev, ...picked].slice(0, MAX_FILES));
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: [
+          'image/*',
+          'application/pdf',
+          'text/csv',
+          'text/comma-separated-values',
+          'application/vnd.ms-excel',
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // .xlsx
+        ],
+        multiple: true,
+        copyToCacheDirectory: true,
+      });
+
+      if (result.canceled) return;
+
+      const assets = result.assets || [];
+      const remaining = MAX_FILES - files.length;
+      const selected = assets.slice(0, remaining);
+
+      const newFiles: AttachedFile[] = [];
+
+      for (let i = 0; i < selected.length; i++) {
+        const asset = selected[i];
+        // File ko base64 me convert karna
+        const response = await fetch(asset.uri);
+        const blob = await response.blob();
+        const base64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const res = reader.result as string;
+            // data:application/pdf;base64,.... se sirf base64 part nikaalo
+            resolve(res.includes(',') ? res.split(',')[1] : res);
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+
+        newFiles.push({
+          uri: asset.uri,
+          data: base64,
+          type: asset.mimeType || 'application/octet-stream',
+          name: asset.name || `file_${Date.now()}_${i}`,
+        });
+      }
+
+      setFiles((prev) => [...prev, ...newFiles].slice(0, MAX_FILES));
+    } catch (err) {
+      console.log('Document pick error:', err);
+      showCustomAlert('Error', 'Could not pick file. Please try again.', 'error');
+    }
   };
 
   const removeFile = (idx: number) => setFiles((prev) => prev.filter((_, i) => i !== idx));
+
+  // File icon decide karne ke liye helper
+  const getFileIcon = (type: string, name: string) => {
+    const t = (type || '').toLowerCase();
+    const n = (name || '').toLowerCase();
+    if (t.includes('pdf') || n.endsWith('.pdf')) return 'document-text';
+    if (t.includes('csv') || n.endsWith('.csv') || t.includes('excel') || n.endsWith('.xlsx') || n.endsWith('.xls')) return 'grid';
+    if (t.includes('image')) return 'image';
+    return 'document-attach';
+  };
+
+  const isImageFile = (type: string, name: string) => {
+    const t = (type || '').toLowerCase();
+    const n = (name || '').toLowerCase();
+    return t.includes('image') || n.endsWith('.jpg') || n.endsWith('.jpeg') || n.endsWith('.png') || n.endsWith('.webp');
+  };
 
   const handleGoBack = (refresh = false) => {
     if (isModalView && onClose) {
@@ -736,7 +783,7 @@ export default function RaiseTicketScreen({ onClose }: { onClose?: (refresh?: bo
     try {
       const res = await api.createTicket(payload);
       if (res && res.success) {
-        clearCache(); // 🔥 Clears context ticket caches instantly so dashboard loads fresh list on return
+        clearCache();
         showCustomAlert(
           'Success!',
           `Ticket Created: ${res.ticketId}`,
@@ -788,7 +835,6 @@ export default function RaiseTicketScreen({ onClose }: { onClose?: (refresh?: bo
   const alertColor = alertType === 'success' ? '#10B981' : alertType === 'error' ? '#EF4444' : Theme.colors.primary;
   const alertBg = alertType === 'success' ? '#ECFDF5' : alertType === 'error' ? '#FEF2F2' : '#EFF6FF';
 
-  // Filter solver options to exclude current user
   const solverList = dropdowns.solvers.filter((s: string) => s !== user?.name);
 
   return (
@@ -889,20 +935,35 @@ export default function RaiseTicketScreen({ onClose }: { onClose?: (refresh?: bo
               )}
             </View>
 
+            {/* ✅ UPDATED ATTACH SECTION */}
             <View style={styles.formGroup}>
-              <Text style={styles.label}>ATTACH IMAGES (OPTIONAL, MAX {MAX_FILES})</Text>
+              <Text style={styles.label}>ATTACH FILES (OPTIONAL, MAX {MAX_FILES})</Text>
+              <Text style={styles.hintText}>Images, PDF, CSV supported</Text>
               <View style={styles.filesRow}>
                 {files.map((f, i) => (
                   <View key={i} style={styles.thumbWrap}>
-                    <Image source={{ uri: f.uri }} style={styles.thumb} />
+                    {isImageFile(f.type, f.name) ? (
+                      <Image source={{ uri: f.uri }} style={styles.thumb} />
+                    ) : (
+                      <View style={[styles.thumb, styles.docThumb]}>
+                        <Ionicons
+                          name={getFileIcon(f.type, f.name) as any}
+                          size={28}
+                          color={Theme.colors.primary}
+                        />
+                        <Text style={styles.docName} numberOfLines={2}>
+                          {f.name}
+                        </Text>
+                      </View>
+                    )}
                     <TouchableOpacity style={styles.thumbRemove} onPress={() => removeFile(i)}>
                       <Ionicons name="close-circle" size={20} color="#EF4444" />
                     </TouchableOpacity>
                   </View>
                 ))}
                 {files.length < MAX_FILES && (
-                  <TouchableOpacity style={styles.addImgBtn} onPress={pickImages} activeOpacity={0.7}>
-                    <Ionicons name="image-outline" size={24} color={Theme.colors.primary} />
+                  <TouchableOpacity style={styles.addImgBtn} onPress={pickFiles} activeOpacity={0.7}>
+                    <Ionicons name="attach" size={24} color={Theme.colors.primary} />
                     <Text style={styles.addImgText}>Add</Text>
                   </TouchableOpacity>
                 )}
@@ -925,7 +986,7 @@ export default function RaiseTicketScreen({ onClose }: { onClose?: (refresh?: bo
         </View>
       </View>
 
-      {/* Search Modal */}
+      {/* Search Modal - same as before */}
       <Modal visible={modalVisible} animationType="slide" transparent={false}>
         <SafeAreaView style={styles.modalSafeArea}>
           <View style={styles.webOuterContainer}>
@@ -974,7 +1035,7 @@ export default function RaiseTicketScreen({ onClose }: { onClose?: (refresh?: bo
         </SafeAreaView>
       </Modal>
 
-      {/* ========== CUSTOM SWEET ALERT ========== */}
+      {/* Custom Alert - same as before */}
       <Modal visible={alertVisible} transparent animationType="fade" onRequestClose={closeCustomAlert}>
         <View style={styles.alertOverlay}>
           <View style={styles.alertCard}>
@@ -982,7 +1043,7 @@ export default function RaiseTicketScreen({ onClose }: { onClose?: (refresh?: bo
               <Ionicons name={alertIcon as any} size={42} color={alertColor} />
             </View>
             <Text style={styles.alertTitle}>{alertTitle}</Text>
-           <Text style={styles.alertMessage}>{alertMsg}</Text>
+            <Text style={styles.alertMessage}>{alertMsg}</Text>
             <TouchableOpacity
               style={[styles.alertOkBtn, { backgroundColor: alertColor }]}
               onPress={closeCustomAlert}
@@ -997,7 +1058,6 @@ export default function RaiseTicketScreen({ onClose }: { onClose?: (refresh?: bo
   );
 }
 
-// ... Stylings remain identical to preserve CSS exactly as provided ...
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: Theme.colors.background },
   webOuterContainer: { flex: 1, alignItems: 'center', backgroundColor: Theme.colors.background },
@@ -1020,6 +1080,7 @@ const styles = StyleSheet.create({
   scrollContent: { padding: 20 },
   formGroup: { marginBottom: 20 },
   label: { fontSize: 12, fontWeight: '700', color: Theme.colors.textMuted, marginBottom: 8, letterSpacing: 0.5 },
+  hintText: { fontSize: 11, color: Theme.colors.textMuted, marginBottom: 8, marginTop: -4 },
   dropdownBox: {
     backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: Theme.colors.border, borderRadius: 12,
     paddingHorizontal: 14, height: 50, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
@@ -1043,6 +1104,10 @@ const styles = StyleSheet.create({
   filesRow: { flexDirection: 'row', flexWrap: 'wrap' },
   thumbWrap: { width: 80, height: 80, marginRight: 10, marginBottom: 10 },
   thumb: { width: 80, height: 80, borderRadius: 10, borderWidth: 1, borderColor: Theme.colors.border },
+  docThumb: {
+    backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center', padding: 6,
+  },
+  docName: { fontSize: 8, color: Theme.colors.textMuted, textAlign: 'center', marginTop: 4 },
   thumbRemove: { position: 'absolute', top: -8, right: -8, backgroundColor: '#FFFFFF', borderRadius: 10 },
   addImgBtn: {
     width: 80, height: 80, borderRadius: 10, borderWidth: 1, borderStyle: 'dashed',
@@ -1076,7 +1141,6 @@ const styles = StyleSheet.create({
   modalItemText: { fontSize: 15, fontWeight: '600', color: Theme.colors.text },
   emptySearch: { padding: 30, alignItems: 'center' },
   emptySearchText: { color: Theme.colors.textMuted, fontSize: 14 },
-
   alertOverlay: {
     flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center', padding: 24,
   },

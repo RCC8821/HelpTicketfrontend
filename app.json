@@ -16,7 +16,13 @@
         "foregroundImage": "./assets/images/android-icon-foreground.png"
       },
       "predictiveBackGestureEnabled": false,
-      "package": "com.rccinfra.helpticketapp"
+      "package": "com.rccinfra.helpticketapp",
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.READ_MEDIA_IMAGES"
+      ]
     },
     "web": {
       "output": "static",
@@ -32,7 +38,14 @@
           "imageWidth": 120
         }
       ],
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow app to access photos for tickets.",
+          "cameraPermission": "Allow app to use camera for tickets."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
@@ -42,6 +55,12 @@
       "eas": {
         "projectId": "576f605a-33aa-41a6-9d82-787458755f42"
       }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/576f605a-33aa-41a6-9d82-787458755f42"
     }
   }
 }

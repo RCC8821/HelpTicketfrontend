@@ -1,167 +1,6 @@
-// import React, { useState } from 'react';
-// import {
-//   View,
-//   Text,
-//   TextInput,
-//   TouchableOpacity,
-//   StyleSheet,
-//   KeyboardAvoidingView,
-//   Platform,
-//   ActivityIndicator,
-//   Alert,
-// } from 'react-native';
-// import { router } from 'expo-router';
-// import { Ionicons } from '@expo/vector-icons';
-// import AsyncStorage from '@react-native-async-storage/async-storage';
-// import { Theme } from '../constants/theme';
-// import { api } from '../services/api';
-
-// export default function LoginScreen() {
-//   const [email, setEmail] = useState('');
-//   const [password, setPassword] = useState('');
-//   const [loading, setLoading] = useState(false);
-
-//   const handleLogin = async () => {
-//     if (!email.trim() || !password.trim()) {
-//       Alert.alert('Error', 'Please enter email and password');
-//       return;
-//     }
-
-//     setLoading(true);
-//     try {
-//       const res = await api.login(email.trim(), password);
-//       if (res.success) {
-//         await AsyncStorage.setItem('fms_user', JSON.stringify(res.user));
-//         router.replace('/dashboard');
-//       } else {
-//         Alert.alert('Login Failed', res.message || 'Invalid credentials');
-//       }
-//     } catch (error) {
-//       Alert.alert('Error', 'Something went wrong. Try again.');
-//     } finally {
-//       setLoading(false);
-//     }
-//   };
-
-//   return (
-//     <KeyboardAvoidingView
-//       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-//       style={styles.container}
-//     >
-//       <View style={styles.card}>
-//         {/* Header (Exact like image) */}
-//         <View style={styles.header}>
-//           <Ionicons name="construct" size={26} color={Theme.colors.primary} style={{ marginRight: 8 }} />
-//           <Text style={styles.title}>FMS Login</Text>
-//         </View>
-
-//         {/* Email Input */}
-//         <TextInput
-//           style={styles.input}
-//           placeholder="Email"
-//           placeholderTextColor={Theme.colors.textMuted}
-//           keyboardType="email-address"
-//           autoCapitalize="none"
-//           autoCorrect={false}
-//           value={email}
-//           onChangeText={setEmail}
-//         />
-
-//         {/* Password Input */}
-//         <TextInput
-//           style={styles.input}
-//           placeholder="Password"
-//           placeholderTextColor={Theme.colors.textMuted}
-//           secureTextEntry
-//           value={password}
-//           onChangeText={setPassword}
-//         />
-
-//         {/* Login Button */}
-//         <TouchableOpacity
-//           style={[styles.loginButton, loading && styles.loginButtonDisabled]}
-//           onPress={handleLogin}
-//           disabled={loading}
-//           activeOpacity={0.8}
-//         >
-//           {loading ? (
-//             <ActivityIndicator color="#FFFFFF" />
-//           ) : (
-//             <Text style={styles.loginButtonText}>Sign In</Text>
-//           )}
-//         </TouchableOpacity>
-//       </View>
-//     </KeyboardAvoidingView>
-//   );
-// }
-
-// const styles = StyleSheet.create({
-//   container: {
-//     flex: 1,
-//     backgroundColor: Theme.colors.background,
-//     justifyContent: 'center',
-//     alignItems: 'center',
-//     padding: 20,
-//   },
-//   card: {
-//     width: '100%',
-//     maxWidth: 400,
-//     backgroundColor: Theme.colors.surface,
-//     borderRadius: 16,
-//     padding: 30,
-//     elevation: 3,
-//     shadowColor: '#000',
-//     shadowOffset: { width: 0, height: 4 },
-//     shadowOpacity: 0.05,
-//     shadowRadius: 10,
-//   },
-//   header: {
-//     flexDirection: 'row',
-//     alignItems: 'center',
-//     justifyContent: 'center',
-//     marginBottom: 30,
-//   },
-//   title: {
-//     fontSize: 24,
-//     fontWeight: '700',
-//     color: Theme.colors.primary,
-//   },
-//   input: {
-//     width: '100%',
-//     height: 50,
-//     borderWidth: 1,
-//     borderColor: Theme.colors.border,
-//     borderRadius: 8,
-//     paddingHorizontal: 16,
-//     marginBottom: 16,
-//     fontSize: 15,
-//     color: Theme.colors.text,
-//     backgroundColor: Theme.colors.surface,
-//   },
-//   loginButton: {
-//     width: '100%',
-//     height: 50,
-//     backgroundColor: Theme.colors.primary,
-//     borderRadius: 25, // Rounded pill shape like image
-//     justifyContent: 'center',
-//     alignItems: 'center',
-//     marginTop: 10,
-//   },
-//   loginButtonDisabled: {
-//     opacity: 0.7,
-//   },
-//   loginButtonText: {
-//     color: '#FFFFFF',
-//     fontSize: 16,
-//     fontWeight: '600',
-//   },
-// });
 
 
-
-
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   KeyboardAvoidingView, Platform, ActivityIndicator, Modal,
@@ -177,17 +16,32 @@ export default function LoginScreen() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // ========== CUSTOM ALERT STATE ==========
+  // ========== AUTO-REDIRECT IF LOGGED IN ==========
+  useEffect(() => {
+    const checkSession = async () => {
+      try {
+        const savedUser = await AsyncStorage.getItem('fms_user');
+        if (savedUser) {
+          router.replace('/dashboard');
+        }
+      } catch (err) {
+        console.log('Error reading storage:', err);
+      }
+    };
+    checkSession();
+  }, []);
+
+  // ========== CUSTOM ERROR/INFO ALERT STATE ==========
   const [alertVisible, setAlertVisible] = useState(false);
   const [alertTitle, setAlertTitle] = useState('');
   const [alertMsg, setAlertMsg] = useState('');
-  const [alertType, setAlertType] = useState<'success' | 'error' | 'info'>('success');
+  const [alertType, setAlertType] = useState<'success' | 'error' | 'info'>('error');
   const [alertOnOk, setAlertOnOk] = useState<(() => void) | null>(null);
 
   const showCustomAlert = (
     title: string,
     msg: string,
-    type: 'success' | 'error' | 'info' = 'success',
+    type: 'success' | 'error' | 'info' = 'error',
     onOk?: () => void
   ) => {
     setAlertTitle(title);
@@ -212,14 +66,13 @@ export default function LoginScreen() {
     try {
       const res = await api.login(email.trim(), password);
       if (res.success) {
+        // Local Storage me user data save karein
         await AsyncStorage.setItem('fms_user', JSON.stringify(res.user));
-        showCustomAlert(
-          'Welcome!',
-          `Login successful. Hello ${res.user?.name || 'User'}!`,
-          'success',
-          () => router.replace('/dashboard')
-        );
+        
+        // 🚀 KOI POPUP NAHI - DIRECT REDIRECT TO DASHBOARD
+        router.replace('/dashboard');
       } else {
+        // Login fail hone par error popup
         showCustomAlert('Login Failed', res.message || 'Invalid credentials', 'error');
       }
     } catch (error) {
@@ -278,7 +131,7 @@ export default function LoginScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* ========== CUSTOM SWEET ALERT ========== */}
+      {/* ========== CUSTOM SWEET ALERT (Sirf Error par dikhane ke liye) ========== */}
       <Modal visible={alertVisible} transparent animationType="fade" onRequestClose={closeCustomAlert}>
         <View style={styles.alertOverlay}>
           <View style={styles.alertCard}>
