@@ -718,7 +718,7 @@ const ACTION_META: Record<ActionKind, { label: string; icon: any; color: string;
 };
 
 // ========================================================
-// ✅ HELPER: TIME LEFT & PARSE IMAGE URLs
+// ✅ EXACT PREVIOUS HELPERS (No Sheet Logic)
 // ========================================================
 function parseAppDate(val: any): Date | null {
   if (!val) return null;
@@ -740,21 +740,34 @@ function parseAppDate(val: any): Date | null {
   return isNaN(d.getTime()) ? null : d;
 }
 
-function getTimeLeft(plannedDate?: string, desiredDate?: string, reviseDate?: string, sheetTimeLeft?: string) {
-  if (sheetTimeLeft && String(sheetTimeLeft).trim() !== '' && String(sheetTimeLeft).trim() !== '-') {
-    const valStr = String(sheetTimeLeft).trim();
-    const isOverdue = valStr.startsWith('-') || valStr.toLowerCase().includes('late');
-    return { text: valStr, overdue: isOverdue };
-  }
-  const target = parseAppDate(reviseDate) || parseAppDate(plannedDate) || parseAppDate(desiredDate);
+function getTimeLeft(plannedDate?: string, desiredDate?: string, reviseDate?: string) {
+  const target =
+    parseAppDate(reviseDate) ||
+    parseAppDate(plannedDate) ||
+    parseAppDate(desiredDate);
+
   if (!target) return null;
+
   const now = new Date();
   const diffMs = target.getTime() - now.getTime();
   const overdue = diffMs < 0;
+
   const absMins = Math.floor(Math.abs(diffMs) / 60000);
-  const hours = Math.floor(absMins / 60);
+  const totalHours = Math.floor(absMins / 60);
   const mins = absMins % 60;
-  const text = `${overdue ? '-' : ''}${hours}:${String(mins).padStart(2, '0')}`;
+
+  const days = Math.floor(totalHours / 24);
+  const hours = totalHours % 24;
+
+  // ✅ Days + Hours:Minutes  (jaise pehle dikhna chahiye)
+  // Example: 30d 8:18   |   2d 8:18   |   0d 5:12 → 5:12
+  let text = '';
+  if (days > 0) {
+    text = `${overdue ? '-' : ''}${days}d ${hours}:${String(mins).padStart(2, '0')}`;
+  } else {
+    text = `${overdue ? '-' : ''}${hours}:${String(mins).padStart(2, '0')}`;
+  }
+
   return { text, overdue };
 }
 
@@ -762,6 +775,7 @@ function parseImageUrls(raw: any): string[] {
   if (!raw) return [];
   return String(raw).split(',').map((s) => s.trim()).filter((u) => u.startsWith('http'));
 }
+
 // ========================================================
 
 function DateField({ value, onChange, minToday }: { value: Date | null; onChange: (d: Date | null) => void; minToday?: boolean }) {
@@ -803,6 +817,7 @@ export default function DashboardScreen() {
   const [showRaiseModal, setShowRaiseModal] = useState(false);
 
   const [expandedIssues, setExpandedIssues] = useState<Record<string, boolean>>({});
+
   const [actionTicket, setActionTicket] = useState<any>(null);
   const [actionKind, setActionKind] = useState<ActionKind | null>(null);
   const [remark, setRemark] = useState('');
@@ -908,7 +923,6 @@ export default function DashboardScreen() {
     const isHighPriority = clean(item.priority) === 'high';
     const isExpanded = expandedIssues[item.ticketId];
 
-    // Check for uploaded files (Images/PDFs)
     const attachedUrls = parseImageUrls(item.image);
     const proofUrls = parseImageUrls(item.proof);
 
@@ -921,7 +935,6 @@ export default function DashboardScreen() {
           </View>
         </View>
 
-        {/* ISSUE TEXT WITH SHOW MORE */}
         <View style={styles.issueWrapper}>
           <Text style={styles.ticketIssue} numberOfLines={isExpanded ? undefined : 3}>
             {item.issue}
@@ -933,7 +946,7 @@ export default function DashboardScreen() {
           )}
         </View>
 
-        {/* ✅ ATTACHMENT BUTTONS (Responsive & Clickable) */}
+        {/* ✅ VIEW FILE BUTTONS */}
         {attachedUrls.length > 0 && (
           <View style={styles.attachmentRow}>
             {attachedUrls.map((url, idx) => (
@@ -950,9 +963,9 @@ export default function DashboardScreen() {
           </View>
         )}
 
-        {/* TIME LEFT BAR */}
+        {/* ✅ TIME LEFT BAR (Original Logic) */}
         {(() => {
-          const tl = getTimeLeft(item.plannedDate, item.desiredDate, item.reviseDate, item.sheetTimeLeft);
+          const tl = getTimeLeft(item.plannedDate, item.desiredDate, item.reviseDate);
           if (!tl) return null;
           return (
             <View style={[styles.timeLeftBar, tl.overdue && styles.timeLeftBarOverdue]}>
@@ -1014,7 +1027,7 @@ export default function DashboardScreen() {
           </View>
         )}
 
-        {/* ✅ PROOF BUTTONS (If solver uploaded proof) */}
+        {/* ✅ VIEW PROOF BUTTONS */}
         {proofUrls.length > 0 && (
           <View style={styles.attachmentRow}>
             {proofUrls.map((url, idx) => (
@@ -1257,7 +1270,6 @@ const styles = StyleSheet.create({
   ticketIssue: { fontSize: 16, fontWeight: '700', color: Theme.colors.text, lineHeight: 22 },
   readMoreText: { color: Theme.colors.primary, fontSize: 13, fontWeight: '700', marginTop: 4 },
 
-  // ✅ ATTACHMENT BUTTON STYLES
   attachmentRow: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 12, gap: 8 },
   attachmentBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#EFF6FF', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#BFDBFE', marginRight: 8, marginBottom: 8 },
   attachmentBtnText: { fontSize: 12, color: '#1D4ED8', fontWeight: '600', marginLeft: 6 },
