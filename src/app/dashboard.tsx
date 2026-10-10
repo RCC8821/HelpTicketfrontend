@@ -1,5 +1,6 @@
 
-// import React, { useCallback, useRef, useState } from 'react';
+
+// import React, { useCallback, useRef, useState, useEffect } from 'react';
 // import {
 //   View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, SafeAreaView,
 //   Platform, TextInput, ScrollView, useWindowDimensions, Modal, Image,
@@ -28,6 +29,143 @@
 //   close:   { label: 'Close',   icon: 'lock-closed-outline',      color: '#10B981', title: 'Close Ticket' },
 //   reraise: { label: 'Reraise', icon: 'refresh-outline',          color: '#EF4444', title: 'Reraise Ticket' },
 // };
+
+// // ========================================================
+// // ✅ DATE PARSER (DD/MM/YYYY Safe)
+// // ========================================================
+// function parseAppDate(val: any): Date | null {
+//   if (!val) return null;
+//   const str = String(val).trim().replace(/\u00a0/g, ' ');
+//   if (!str || str === '-' || str === '') return null;
+//   const m = str.match(/^(\d{1,2})[\/\.-](\d{1,2})[\/\.-](\d{2,4})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
+//   if (!m) {
+//     const d = new Date(str);
+//     return isNaN(d.getTime()) ? null : d;
+//   }
+//   let day = parseInt(m[1], 10);
+//   let month = parseInt(m[2], 10) - 1;
+//   let year = parseInt(m[3], 10);
+//   if (year < 100) year += 2000;
+//   const h = m[4] ? parseInt(m[4], 10) : 0;
+//   const min = m[5] ? parseInt(m[5], 10) : 0;
+//   const s = m[6] ? parseInt(m[6], 10) : 0;
+//   const d = new Date(year, month, day, h, min, s);
+//   return isNaN(d.getTime()) ? null : d;
+// }
+
+// // ========================================================
+// // ✅ LIVE TIME LEFT — Final Rule
+// //  1. PC Check     → Timestamp + 1 hour
+// //  2. Solve        → Planned Date 11:59:59 PM
+// //  3. PC Verify    → Actual_2 (solve time) + 1 hour
+// //  4. Close        → Actual_3 (verify time) + 1 hour
+// // ========================================================
+// const LiveTimeLeft = ({ ticket, user }: { ticket: any, user: any }) => {
+//   const [timeLeft, setTimeLeft] = useState<{ text: string, overdue: boolean } | null>(null);
+
+//   useEffect(() => {
+//     if (!user || !ticket) { setTimeLeft(null); return; }
+
+//     const me = clean(user.name);
+//     const isPc = clean(ticket.pc) === me;
+//     const isSolver = clean(ticket.solver) === me;
+//     const isRaiser = clean(ticket.raiser) === me;
+
+//     const s1 = clean(ticket.status1);
+//     const s2 = clean(ticket.status2);
+//     const s3 = clean(ticket.status3);
+//     const s4 = clean(ticket.status4);
+
+//     // ❌ Closed / Reject → hide
+//     if (s4 === 'closed' || s1 === 'reject') { setTimeLeft(null); return; }
+
+//     let targetDate: Date | null = null;
+//     let isMyTurn = false;
+
+//     if (s1 !== 'done') {
+//       // ✅ STEP 1: PC Check — Timestamp + 1 hour
+//       const createdDate = parseAppDate(ticket.timestamp);
+//       if (createdDate) {
+//         targetDate = new Date(createdDate.getTime() + 60 * 60 * 1000);
+//       }
+//       isMyTurn = isPc;
+//     } else if (s2 !== 'solved') {
+//       // ✅ STEP 2: Solve — Planned date ke din 11:59:59 PM
+//       const plannedD = parseAppDate(ticket.reviseDate || ticket.plannedDate);
+//       if (plannedD) {
+//         targetDate = new Date(plannedD.getFullYear(), plannedD.getMonth(), plannedD.getDate(), 23, 59, 59);
+//       }
+//       isMyTurn = isSolver;
+//     } else if (s3 !== 'verified') {
+//       // ✅ STEP 3: PC Verify — Solve hone ke baad + 1 hour
+//       const solvedDate = parseAppDate(ticket.actualDate);
+//       if (solvedDate) {
+//         targetDate = new Date(solvedDate.getTime() + 60 * 60 * 1000);
+//       } else {
+//         const pd3 = parseAppDate(ticket.planned3);
+//         if (pd3) targetDate = new Date(pd3.getFullYear(), pd3.getMonth(), pd3.getDate(), 23, 59, 59);
+//       }
+//       isMyTurn = isPc;
+//     } else if (s4 !== 'closed') {
+//       // ✅ STEP 4: Close — Verify hone ke baad + 1 hour
+//       const verifiedDate = parseAppDate(ticket.actual3);
+//       if (verifiedDate) {
+//         targetDate = new Date(verifiedDate.getTime() + 60 * 60 * 1000);
+//       } else {
+//         const pd4 = parseAppDate(ticket.planned4);
+//         if (pd4) targetDate = new Date(pd4.getFullYear(), pd4.getMonth(), pd4.getDate(), 23, 59, 59);
+//       }
+//       isMyTurn = isRaiser;
+//     }
+
+//     if (!isMyTurn || !targetDate) { setTimeLeft(null); return; }
+
+//     const deadlineMs = targetDate.getTime();
+
+//     const tick = () => {
+//       const now = new Date().getTime();
+//       const diffMs = deadlineMs - now;
+//       const totalSeconds = Math.round(diffMs / 1000);
+//       const isOverdue = totalSeconds < 0;
+//       const absSeconds = Math.abs(totalSeconds);
+
+//       const days = Math.floor(absSeconds / (3600 * 24));
+//       const hours = Math.floor((absSeconds % (3600 * 24)) / 3600);
+//       const mins = Math.floor((absSeconds % 3600) / 60);
+//       const secs = absSeconds % 60;
+
+//       let formattedTime = '';
+//       if (days > 0) {
+//         formattedTime = `${days}d ${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+//       } else if (hours > 0) {
+//         formattedTime = `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+//       } else {
+//         formattedTime = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+//       }
+
+//       setTimeLeft({
+//         text: isOverdue ? `Overdue: -${formattedTime}` : `Time Left: ${formattedTime}`,
+//         overdue: isOverdue
+//       });
+//     };
+
+//     tick();
+//     const intervalId = setInterval(tick, 1000);
+//     return () => clearInterval(intervalId);
+//   }, [ticket, user]);
+
+//   if (!timeLeft) return null;
+
+//   return (
+//     <View style={[styles.timeLeftBar, timeLeft.overdue && styles.timeLeftBarOverdue]}>
+//       <Ionicons name="time-outline" size={16} color={timeLeft.overdue ? '#B91C1C' : '#0E7490'} style={{ marginRight: 6 }} />
+//       <Text style={[styles.timeLeftText, timeLeft.overdue && styles.timeLeftTextOverdue]}>
+//         {timeLeft.text}
+//       </Text>
+//     </View>
+//   );
+// };
+// // ========================================================
 
 // function DateField({ value, onChange, minToday }: { value: Date | null; onChange: (d: Date | null) => void; minToday?: boolean }) {
 //   const [show, setShow] = useState(false);
@@ -66,6 +204,8 @@
 //   const [filter, setFilter] = useState('action');
 //   const [searchQuery, setSearchQuery] = useState('');
 //   const [showRaiseModal, setShowRaiseModal] = useState(false);
+
+//   const [expandedIssues, setExpandedIssues] = useState<Record<string, boolean>>({});
 
 //   const [actionTicket, setActionTicket] = useState<any>(null);
 //   const [actionKind, setActionKind] = useState<ActionKind | null>(null);
@@ -125,7 +265,30 @@
 //   };
 
 //   const openAction = (t: any, kind: ActionKind) => {
-//     if (kind === 'revise' && (parseInt(t.reviseCount, 10) || 0) >= 3) { showCustomAlert('Limit Reached', 'Maximum 3 revisions allowed.', 'error'); return; }
+//     // ✅ FIX: Revise + Reraise dono pe 3-revision limit
+//     if ((kind === 'revise' || kind === 'reraise') && (parseInt(t.reviseCount, 10) || 0) >= 3) {
+//       showCustomAlert('Limit Reached', 'Maximum 3 revisions allowed.', 'error');
+//       return;
+//     }
+
+//     // ✅ FIX: Revise sirf planned date ke baad allowed
+//     if (kind === 'revise') {
+//       const lastDate = parseAppDate(t.reviseDate || t.plannedDate);
+//       if (lastDate) {
+//         const today = new Date();
+//         today.setHours(0, 0, 0, 0);
+//         const lastDay = new Date(lastDate.getFullYear(), lastDate.getMonth(), lastDate.getDate());
+//         if (today < lastDay) {
+//           showCustomAlert(
+//             'Not Allowed',
+//             `Revision is only allowed on or after the planned date: ${t.reviseDate || t.plannedDate}`,
+//             'error'
+//           );
+//           return;
+//         }
+//       }
+//     }
+
 //     setActionTicket(t); setActionKind(kind); setRemark(''); setActionDate(null); setRating(0); setFiles([]); submitLock.current = false;
 //   };
 //   const closeAction = () => { setActionTicket(null); setActionKind(null); };
@@ -170,6 +333,7 @@
 //   const renderTicket = (item: any) => {
 //     const actions = getActions(item);
 //     const isHighPriority = clean(item.priority) === 'high';
+//     const isExpanded = expandedIssues[item.ticketId];
 
 //     return (
 //       <View style={[styles.ticketCard, isHighPriority && styles.ticketCardHigh]}>
@@ -180,7 +344,18 @@
 //           </View>
 //         </View>
 
-//         <Text style={styles.ticketIssue}>{item.issue}</Text>
+//         <View style={styles.issueWrapper}>
+//           <Text style={styles.ticketIssue} numberOfLines={isExpanded ? undefined : 3}>
+//             {item.issue}
+//           </Text>
+//           {item.issue && item.issue.length > 100 && (
+//             <TouchableOpacity activeOpacity={0.7} onPress={() => setExpandedIssues(p => ({ ...p, [item.ticketId]: !p[item.ticketId] }))}>
+//               <Text style={styles.readMoreText}>{isExpanded ? 'Show Less' : 'Read More...'}</Text>
+//             </TouchableOpacity>
+//           )}
+//         </View>
+
+//         <LiveTimeLeft ticket={item} user={user} />
 
 //         <View style={styles.metaRow}>
 //           <View style={[styles.chip, isHighPriority ? styles.chipHigh : styles.chipNormal]}>
@@ -199,35 +374,17 @@
 //           <View style={styles.personBox}><Text style={styles.personLabel}>Solver</Text><Text style={styles.personName}>{item.solver}</Text></View>
 //         </View>
 
-//         {/* ===== STATUS BADGES ===== */}
-//         <View style={styles.statusRow}>
-//           {!!item.status1 && (
-//             <View style={[styles.statusChip, { backgroundColor: clean(item.status1) === 'done' ? '#ECFDF5' : clean(item.status1) === 'reject' ? '#FEF2F2' : '#F1F5F9' }]}>
-//               <Text style={[styles.statusChipText, { color: clean(item.status1) === 'done' ? '#059669' : clean(item.status1) === 'reject' ? '#DC2626' : Theme.colors.textMuted }]}>
-//                 S1: {item.status1}
-//               </Text>
-//             </View>
-//           )}
-//           {!!item.status2 && (
-//             <View style={[styles.statusChip, { backgroundColor: clean(item.status2) === 'solved' ? '#ECFDF5' : clean(item.status2).includes('pending') || clean(item.status2).includes('revision') ? '#FFFBEB' : '#F1F5F9' }]}>
-//               <Text style={[styles.statusChipText, { color: clean(item.status2) === 'solved' ? '#059669' : clean(item.status2).includes('pending') || clean(item.status2).includes('revision') ? '#D97706' : Theme.colors.textMuted }]}>
-//                 S2: {item.status2}
-//               </Text>
-//             </View>
-//           )}
-//           {!!item.status3 && (
-//             <View style={[styles.statusChip, { backgroundColor: '#EFF6FF' }]}><Text style={[styles.statusChipText, { color: '#2563EB' }]}>S3: {item.status3}</Text></View>
-//           )}
-//           {!!item.status4 && (
-//             <View style={[styles.statusChip, { backgroundColor: clean(item.status4) === 'closed' ? '#ECFDF5' : '#FEF2F2' }]}><Text style={[styles.statusChipText, { color: clean(item.status4) === 'closed' ? '#059669' : '#DC2626' }]}>S4: {item.status4}</Text></View>
-//           )}
+//         <View style={styles.dateGrid}>
+//           <View style={styles.dateCol}><Text style={styles.dateLabel}>PLANNED</Text><Text style={styles.dateValue}>{item.plannedDate || '-'}</Text></View>
+//           <View style={styles.dateCol}><Text style={styles.dateLabel}>REVISED</Text><Text style={styles.dateValue}>{item.reviseDate || '-'}</Text></View>
+//         </View>
+//         <View style={[styles.dateGrid, { marginTop: 10, marginBottom: 16 }]}>
+//           <View style={styles.dateCol}><Text style={styles.dateLabel}>REV. COUNT</Text><Text style={styles.dateValue}>{item.reviseCount || '0'}</Text></View>
 //         </View>
 
-//         {/* ===== ALL REMARKS ===== */}
 //         {!!item.remark1 && (
 //           <View style={[styles.remarkBox, { backgroundColor: '#F8FAFC', borderLeftColor: '#94A3B8' }]}>
-//             <Text style={styles.remarkLabel}>PC Remark (Accept/Reject)</Text>
-//             <Text style={[styles.remarkText, { color: Theme.colors.text }]}>💬 {item.remark1}</Text>
+//             <Text style={styles.remarkLabel}>PC Remark (Accept/Reject)</Text><Text style={[styles.remarkText, { color: Theme.colors.text }]}>💬 {item.remark1}</Text>
 //           </View>
 //         )}
 //         {!!item.remark2 && (
@@ -238,8 +395,7 @@
 //         )}
 //         {!!item.remark3 && (
 //           <View style={[styles.remarkBox, { backgroundColor: '#EFF6FF', borderLeftColor: '#3B82F6' }]}>
-//             <Text style={[styles.remarkLabel, { color: '#1D4ED8' }]}>PC Verify Remark</Text>
-//             <Text style={[styles.remarkText, { color: '#1E40AF' }]}>💬 {item.remark3}</Text>
+//             <Text style={[styles.remarkLabel, { color: '#1D4ED8' }]}>PC Verify Remark</Text><Text style={[styles.remarkText, { color: '#1E40AF' }]}>💬 {item.remark3}</Text>
 //           </View>
 //         )}
 
@@ -294,26 +450,12 @@
 //             <View style={[styles.statBox, { borderTopColor: '#3B82F6' }]}><Text style={styles.statNum} numberOfLines={1}>{stats.monthRaised}</Text><Text style={styles.statLabel}>Month Raised</Text></View>
 //             <View style={[styles.statBox, { borderTopColor: '#10B981' }]}><Text style={styles.statNum} numberOfLines={1}>{stats.weekSolved}</Text><Text style={styles.statLabel}>Week Solved</Text></View>
 //             <View style={[styles.statBox, { borderTopColor: '#8B5CF6' }]}><Text style={styles.statNum} numberOfLines={1}>{stats.monthSolved}</Text><Text style={styles.statLabel}>Month Solved</Text></View>
+//             <View style={[styles.statBox, { borderTopColor: '#EC4899' }]}><Text style={styles.statNum} numberOfLines={1}>{stats.weekTarget && stats.weekTarget !== '-' ? stats.weekTarget : '-'}</Text><Text style={styles.statLabel}>Week Target</Text></View>
 //           </View>
 
-//           {/* ✅ FIXED TABS: Now Horizontal Scrollable for Mobile */}
-//           <ScrollView 
-//             horizontal 
-//             showsHorizontalScrollIndicator={false} 
-//             style={styles.segmentScroll}
-//             contentContainerStyle={styles.segmentScrollContent}
-//           >
+//           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.segmentScroll} contentContainerStyle={styles.segmentScrollContent}>
 //             {(['action', 'raised', 'assigned', 'revised'] as const).map((f) => (
-//               <TouchableOpacity
-//                 key={f}
-//                 style={[styles.segmentTab, filter === f && styles.segmentActive]}
-//                 onPress={() => {
-//                   if (f === filter) return;
-//                   setSearchQuery('');
-//                   setFilter(f);
-//                   if (user?.name) fetchTickets(user.name, f, f === 'revised');
-//                 }}
-//               >
+//               <TouchableOpacity key={f} style={[styles.segmentTab, filter === f && styles.segmentActive]} onPress={() => { if (f === filter) return; setSearchQuery(''); setFilter(f); if (user?.name) fetchTickets(user.name, f, f === 'revised'); }}>
 //                 <Text style={[styles.segmentText, filter === f && styles.segmentTextActive]} numberOfLines={1}>
 //                   {f === 'action' ? 'My Actions' : f === 'raised' ? 'Raised' : f === 'assigned' ? 'Assigned' : 'Revised'} ({counts[f as keyof typeof counts] || 0})
 //                 </Text>
@@ -447,12 +589,12 @@
 //   userName: { fontSize: 20, fontWeight: '800', color: Theme.colors.text },
 //   avatar: { width: 44, height: 44, backgroundColor: Theme.colors.primaryLight, borderRadius: 22, justifyContent: 'center', alignItems: 'center' },
 //   avatarText: { fontSize: 18, fontWeight: '700', color: Theme.colors.primary },
-//   statsRow: { flexDirection: 'row', marginBottom: 20, marginHorizontal: -4 },
-//   statBox: { flex: 1, minWidth: 0, marginHorizontal: 4, backgroundColor: Theme.colors.surface, paddingVertical: 12, paddingHorizontal: 4, borderRadius: 12, borderWidth: 1, borderColor: Theme.colors.border, borderTopWidth: 4, alignItems: 'center', elevation: 1 },
+
+//   statsRow: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 16, marginHorizontal: -4 },
+//   statBox: { width: Platform.OS !== 'web' ? '47%' : undefined, flex: Platform.OS === 'web' ? 1 : undefined, minWidth: Platform.OS === 'web' ? 0 : undefined, marginHorizontal: 4, marginBottom: Platform.OS !== 'web' ? 8 : 0, backgroundColor: Theme.colors.surface, paddingVertical: 12, paddingHorizontal: 4, borderRadius: 12, borderWidth: 1, borderColor: Theme.colors.border, borderTopWidth: 4, alignItems: 'center', elevation: 1 },
 //   statNum: { fontSize: 22, fontWeight: '800', color: Theme.colors.text, marginBottom: 4 },
 //   statLabel: { fontSize: 11, fontWeight: '600', color: Theme.colors.textMuted, textAlign: 'center' },
-  
-//   // ✅ UPDATED TAB STYLES FOR HORIZONTAL SCROLL
+
 //   segmentScroll: { marginBottom: 20 },
 //   segmentScrollContent: { flexDirection: 'row', backgroundColor: '#E2E8F0', padding: 4, borderRadius: 12, minWidth: '100%' },
 //   segmentTab: { paddingVertical: 10, paddingHorizontal: 16, alignItems: 'center', borderRadius: 10, marginRight: 4 },
@@ -471,19 +613,32 @@
 //   idContainer: { flexDirection: 'row', alignItems: 'center' },
 //   iconBox: { backgroundColor: '#F1F5F9', padding: 6, borderRadius: 8, marginRight: 8 },
 //   ticketId: { fontSize: 13, fontWeight: '800', color: Theme.colors.text, letterSpacing: 0.5 },
-//   ticketIssue: { fontSize: 16, fontWeight: '700', color: Theme.colors.text, marginBottom: 12, lineHeight: 22 },
+
+//   issueWrapper: { marginBottom: 12 },
+//   ticketIssue: { fontSize: 16, fontWeight: '700', color: Theme.colors.text, lineHeight: 22 },
+//   readMoreText: { color: Theme.colors.primary, fontSize: 13, fontWeight: '700', marginTop: 4 },
+
+//   timeLeftBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#CFFAFE', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 12, borderWidth: 1, borderColor: '#A5F3FC' },
+//   timeLeftBarOverdue: { backgroundColor: '#FEE2E2', borderColor: '#FECACA' },
+//   timeLeftText: { fontSize: 13, fontWeight: '700', color: '#0E7490' },
+//   timeLeftTextOverdue: { color: '#B91C1C' },
+
 //   metaRow: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 12 },
 //   chip: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, marginRight: 8, marginBottom: 6, borderWidth: 1, borderColor: '#F1F5F9' },
 //   chipHigh: { backgroundColor: '#FEF2F2', borderColor: '#FEE2E2' },
 //   chipNormal: { backgroundColor: '#ECFDF5', borderColor: '#D1FAE5' },
 //   chipText: { fontSize: 12, fontWeight: '600', color: Theme.colors.textMuted, marginLeft: 2 },
-//   peopleGrid: { flexDirection: 'row', backgroundColor: '#F8FAFC', borderRadius: 12, padding: 12, alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12, borderWidth: 1, borderColor: '#F1F5F9' },
-//   personBox: { flex: 1 },
+//   peopleGrid: { flexDirection: 'row', backgroundColor: '#F8FAFC', borderRadius: 12, padding: 10, alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 12, borderWidth: 1, borderColor: '#F1F5F9' },
+//   personBox: { flex: 1, paddingHorizontal: 2 },
 //   personLabel: { fontSize: 11, color: Theme.colors.textMuted, fontWeight: '600', marginBottom: 2 },
-//   personName: { fontSize: 13, color: Theme.colors.text, fontWeight: '700' },
-//   personDivider: { width: 1, height: '100%', backgroundColor: '#E2E8F0', marginHorizontal: 10 },
-//   extraInfoRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12, paddingHorizontal: 4 },
-//   extraInfoText: { fontSize: 12, color: Theme.colors.textMuted, fontWeight: '500' },
+//   personName: { fontSize: 12, color: Theme.colors.text, fontWeight: '700' },
+//   personDivider: { width: 1, height: '100%', backgroundColor: '#E2E8F0', marginHorizontal: 6 },
+
+//   dateGrid: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 4 },
+//   dateCol: { flex: 1 },
+//   dateLabel: { fontSize: 10, color: Theme.colors.textMuted, fontWeight: '700', marginBottom: 2, textTransform: 'uppercase' },
+//   dateValue: { fontSize: 13, color: Theme.colors.text, fontWeight: '700' },
+
 //   statusRow: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 10, gap: 6 },
 //   statusChip: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, marginRight: 6, marginBottom: 4 },
 //   statusChipText: { fontSize: 11, fontWeight: '700' },
@@ -526,10 +681,16 @@
 
 
 
-import React, { useCallback, useRef, useState, useEffect } from 'react';
+
+
+
+
+
+
+import React, { useCallback, useRef, useState } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, SafeAreaView,
-  Platform, TextInput, ScrollView, useWindowDimensions, Modal, Image,
+  Platform, TextInput, ScrollView, useWindowDimensions, Modal, Image, Linking
 } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -557,12 +718,12 @@ const ACTION_META: Record<ActionKind, { label: string; icon: any; color: string;
 };
 
 // ========================================================
-// ✅ DATE PARSER (DD/MM/YYYY Safe)
+// ✅ HELPER: TIME LEFT & PARSE IMAGE URLs
 // ========================================================
 function parseAppDate(val: any): Date | null {
   if (!val) return null;
   const str = String(val).trim().replace(/\u00a0/g, ' ');
-  if (!str || str === '-' || str === '') return null;
+  if (!str || str === '-') return null;
   const m = str.match(/^(\d{1,2})[\/\.-](\d{1,2})[\/\.-](\d{2,4})(?:\s+(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
   if (!m) {
     const d = new Date(str);
@@ -572,125 +733,35 @@ function parseAppDate(val: any): Date | null {
   let month = parseInt(m[2], 10) - 1;
   let year = parseInt(m[3], 10);
   if (year < 100) year += 2000;
-  const h = m[4] ? parseInt(m[4], 10) : 0;
-  const min = m[5] ? parseInt(m[5], 10) : 0;
-  const s = m[6] ? parseInt(m[6], 10) : 0;
+  const h = m[4] ? parseInt(m[4], 10) : 23;
+  const min = m[5] ? parseInt(m[5], 10) : 59;
+  const s = m[6] ? parseInt(m[6], 10) : 59;
   const d = new Date(year, month, day, h, min, s);
   return isNaN(d.getTime()) ? null : d;
 }
 
-// ========================================================
-// ✅ LIVE TIME LEFT — Final Rule
-//  1. PC Check     → Timestamp + 1 hour
-//  2. Solve        → Planned Date 11:59:59 PM
-//  3. PC Verify    → Actual_2 (solve time) + 1 hour
-//  4. Close        → Actual_3 (verify time) + 1 hour
-// ========================================================
-const LiveTimeLeft = ({ ticket, user }: { ticket: any, user: any }) => {
-  const [timeLeft, setTimeLeft] = useState<{ text: string, overdue: boolean } | null>(null);
+function getTimeLeft(plannedDate?: string, desiredDate?: string, reviseDate?: string, sheetTimeLeft?: string) {
+  if (sheetTimeLeft && String(sheetTimeLeft).trim() !== '' && String(sheetTimeLeft).trim() !== '-') {
+    const valStr = String(sheetTimeLeft).trim();
+    const isOverdue = valStr.startsWith('-') || valStr.toLowerCase().includes('late');
+    return { text: valStr, overdue: isOverdue };
+  }
+  const target = parseAppDate(reviseDate) || parseAppDate(plannedDate) || parseAppDate(desiredDate);
+  if (!target) return null;
+  const now = new Date();
+  const diffMs = target.getTime() - now.getTime();
+  const overdue = diffMs < 0;
+  const absMins = Math.floor(Math.abs(diffMs) / 60000);
+  const hours = Math.floor(absMins / 60);
+  const mins = absMins % 60;
+  const text = `${overdue ? '-' : ''}${hours}:${String(mins).padStart(2, '0')}`;
+  return { text, overdue };
+}
 
-  useEffect(() => {
-    if (!user || !ticket) { setTimeLeft(null); return; }
-
-    const me = clean(user.name);
-    const isPc = clean(ticket.pc) === me;
-    const isSolver = clean(ticket.solver) === me;
-    const isRaiser = clean(ticket.raiser) === me;
-
-    const s1 = clean(ticket.status1);
-    const s2 = clean(ticket.status2);
-    const s3 = clean(ticket.status3);
-    const s4 = clean(ticket.status4);
-
-    // ❌ Closed / Reject → hide
-    if (s4 === 'closed' || s1 === 'reject') { setTimeLeft(null); return; }
-
-    let targetDate: Date | null = null;
-    let isMyTurn = false;
-
-    if (s1 !== 'done') {
-      // ✅ STEP 1: PC Check — Timestamp + 1 hour
-      const createdDate = parseAppDate(ticket.timestamp);
-      if (createdDate) {
-        targetDate = new Date(createdDate.getTime() + 60 * 60 * 1000);
-      }
-      isMyTurn = isPc;
-    } else if (s2 !== 'solved') {
-      // ✅ STEP 2: Solve — Planned date ke din 11:59:59 PM
-      const plannedD = parseAppDate(ticket.reviseDate || ticket.plannedDate);
-      if (plannedD) {
-        targetDate = new Date(plannedD.getFullYear(), plannedD.getMonth(), plannedD.getDate(), 23, 59, 59);
-      }
-      isMyTurn = isSolver;
-    } else if (s3 !== 'verified') {
-      // ✅ STEP 3: PC Verify — Solve hone ke baad + 1 hour
-      const solvedDate = parseAppDate(ticket.actualDate);
-      if (solvedDate) {
-        targetDate = new Date(solvedDate.getTime() + 60 * 60 * 1000);
-      } else {
-        const pd3 = parseAppDate(ticket.planned3);
-        if (pd3) targetDate = new Date(pd3.getFullYear(), pd3.getMonth(), pd3.getDate(), 23, 59, 59);
-      }
-      isMyTurn = isPc;
-    } else if (s4 !== 'closed') {
-      // ✅ STEP 4: Close — Verify hone ke baad + 1 hour
-      const verifiedDate = parseAppDate(ticket.actual3);
-      if (verifiedDate) {
-        targetDate = new Date(verifiedDate.getTime() + 60 * 60 * 1000);
-      } else {
-        const pd4 = parseAppDate(ticket.planned4);
-        if (pd4) targetDate = new Date(pd4.getFullYear(), pd4.getMonth(), pd4.getDate(), 23, 59, 59);
-      }
-      isMyTurn = isRaiser;
-    }
-
-    if (!isMyTurn || !targetDate) { setTimeLeft(null); return; }
-
-    const deadlineMs = targetDate.getTime();
-
-    const tick = () => {
-      const now = new Date().getTime();
-      const diffMs = deadlineMs - now;
-      const totalSeconds = Math.round(diffMs / 1000);
-      const isOverdue = totalSeconds < 0;
-      const absSeconds = Math.abs(totalSeconds);
-
-      const days = Math.floor(absSeconds / (3600 * 24));
-      const hours = Math.floor((absSeconds % (3600 * 24)) / 3600);
-      const mins = Math.floor((absSeconds % 3600) / 60);
-      const secs = absSeconds % 60;
-
-      let formattedTime = '';
-      if (days > 0) {
-        formattedTime = `${days}d ${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-      } else if (hours > 0) {
-        formattedTime = `${String(hours).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-      } else {
-        formattedTime = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-      }
-
-      setTimeLeft({
-        text: isOverdue ? `Overdue: -${formattedTime}` : `Time Left: ${formattedTime}`,
-        overdue: isOverdue
-      });
-    };
-
-    tick();
-    const intervalId = setInterval(tick, 1000);
-    return () => clearInterval(intervalId);
-  }, [ticket, user]);
-
-  if (!timeLeft) return null;
-
-  return (
-    <View style={[styles.timeLeftBar, timeLeft.overdue && styles.timeLeftBarOverdue]}>
-      <Ionicons name="time-outline" size={16} color={timeLeft.overdue ? '#B91C1C' : '#0E7490'} style={{ marginRight: 6 }} />
-      <Text style={[styles.timeLeftText, timeLeft.overdue && styles.timeLeftTextOverdue]}>
-        {timeLeft.text}
-      </Text>
-    </View>
-  );
-};
+function parseImageUrls(raw: any): string[] {
+  if (!raw) return [];
+  return String(raw).split(',').map((s) => s.trim()).filter((u) => u.startsWith('http'));
+}
 // ========================================================
 
 function DateField({ value, onChange, minToday }: { value: Date | null; onChange: (d: Date | null) => void; minToday?: boolean }) {
@@ -732,7 +803,6 @@ export default function DashboardScreen() {
   const [showRaiseModal, setShowRaiseModal] = useState(false);
 
   const [expandedIssues, setExpandedIssues] = useState<Record<string, boolean>>({});
-
   const [actionTicket, setActionTicket] = useState<any>(null);
   const [actionKind, setActionKind] = useState<ActionKind | null>(null);
   const [remark, setRemark] = useState('');
@@ -791,30 +861,7 @@ export default function DashboardScreen() {
   };
 
   const openAction = (t: any, kind: ActionKind) => {
-    // ✅ FIX: Revise + Reraise dono pe 3-revision limit
-    if ((kind === 'revise' || kind === 'reraise') && (parseInt(t.reviseCount, 10) || 0) >= 3) {
-      showCustomAlert('Limit Reached', 'Maximum 3 revisions allowed.', 'error');
-      return;
-    }
-
-    // ✅ FIX: Revise sirf planned date ke baad allowed
-    if (kind === 'revise') {
-      const lastDate = parseAppDate(t.reviseDate || t.plannedDate);
-      if (lastDate) {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const lastDay = new Date(lastDate.getFullYear(), lastDate.getMonth(), lastDate.getDate());
-        if (today < lastDay) {
-          showCustomAlert(
-            'Not Allowed',
-            `Revision is only allowed on or after the planned date: ${t.reviseDate || t.plannedDate}`,
-            'error'
-          );
-          return;
-        }
-      }
-    }
-
+    if (kind === 'revise' && (parseInt(t.reviseCount, 10) || 0) >= 3) { showCustomAlert('Limit Reached', 'Maximum 3 revisions allowed.', 'error'); return; }
     setActionTicket(t); setActionKind(kind); setRemark(''); setActionDate(null); setRating(0); setFiles([]); submitLock.current = false;
   };
   const closeAction = () => { setActionTicket(null); setActionKind(null); };
@@ -861,6 +908,10 @@ export default function DashboardScreen() {
     const isHighPriority = clean(item.priority) === 'high';
     const isExpanded = expandedIssues[item.ticketId];
 
+    // Check for uploaded files (Images/PDFs)
+    const attachedUrls = parseImageUrls(item.image);
+    const proofUrls = parseImageUrls(item.proof);
+
     return (
       <View style={[styles.ticketCard, isHighPriority && styles.ticketCardHigh]}>
         <View style={styles.ticketHeader}>
@@ -870,6 +921,7 @@ export default function DashboardScreen() {
           </View>
         </View>
 
+        {/* ISSUE TEXT WITH SHOW MORE */}
         <View style={styles.issueWrapper}>
           <Text style={styles.ticketIssue} numberOfLines={isExpanded ? undefined : 3}>
             {item.issue}
@@ -881,7 +933,36 @@ export default function DashboardScreen() {
           )}
         </View>
 
-        <LiveTimeLeft ticket={item} user={user} />
+        {/* ✅ ATTACHMENT BUTTONS (Responsive & Clickable) */}
+        {attachedUrls.length > 0 && (
+          <View style={styles.attachmentRow}>
+            {attachedUrls.map((url, idx) => (
+              <TouchableOpacity
+                key={idx}
+                style={styles.attachmentBtn}
+                activeOpacity={0.7}
+                onPress={() => Platform.OS === 'web' ? window.open(url, '_blank') : Linking.openURL(url).catch(() => {})}
+              >
+                <Ionicons name="link-outline" size={14} color="#1D4ED8" />
+                <Text style={styles.attachmentBtnText}>View File {idx + 1}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
+        {/* TIME LEFT BAR */}
+        {(() => {
+          const tl = getTimeLeft(item.plannedDate, item.desiredDate, item.reviseDate, item.sheetTimeLeft);
+          if (!tl) return null;
+          return (
+            <View style={[styles.timeLeftBar, tl.overdue && styles.timeLeftBarOverdue]}>
+              <Ionicons name="time-outline" size={16} color={tl.overdue ? '#B91C1C' : '#0E7490'} style={{ marginRight: 6 }} />
+              <Text style={[styles.timeLeftText, tl.overdue && styles.timeLeftTextOverdue]}>
+                Time Left: {tl.text}
+              </Text>
+            </View>
+          );
+        })()}
 
         <View style={styles.metaRow}>
           <View style={[styles.chip, isHighPriority ? styles.chipHigh : styles.chipNormal]}>
@@ -908,11 +989,43 @@ export default function DashboardScreen() {
           <View style={styles.dateCol}><Text style={styles.dateLabel}>REV. COUNT</Text><Text style={styles.dateValue}>{item.reviseCount || '0'}</Text></View>
         </View>
 
+        <View style={styles.statusRow}>
+          {!!item.status1 && (
+            <View style={[styles.statusChip, { backgroundColor: clean(item.status1) === 'done' ? '#ECFDF5' : clean(item.status1) === 'reject' ? '#FEF2F2' : '#F1F5F9' }]}>
+              <Text style={[styles.statusChipText, { color: clean(item.status1) === 'done' ? '#059669' : clean(item.status1) === 'reject' ? '#DC2626' : Theme.colors.textMuted }]}>S1: {item.status1}</Text>
+            </View>
+          )}
+          {!!item.status2 && (
+            <View style={[styles.statusChip, { backgroundColor: clean(item.status2) === 'solved' ? '#ECFDF5' : clean(item.status2).includes('pending') || clean(item.status2).includes('revision') ? '#FFFBEB' : '#F1F5F9' }]}>
+              <Text style={[styles.statusChipText, { color: clean(item.status2) === 'solved' ? '#059669' : clean(item.status2).includes('pending') || clean(item.status2).includes('revision') ? '#D97706' : Theme.colors.textMuted }]}>S2: {item.status2}</Text>
+            </View>
+          )}
+          {!!item.status3 && (
+            <View style={[styles.statusChip, { backgroundColor: '#EFF6FF' }]}><Text style={[styles.statusChipText, { color: '#2563EB' }]}>S3: {item.status3}</Text></View>
+          )}
+          {!!item.status4 && (
+            <View style={[styles.statusChip, { backgroundColor: clean(item.status4) === 'closed' ? '#ECFDF5' : '#FEF2F2' }]}><Text style={[styles.statusChipText, { color: clean(item.status4) === 'closed' ? '#059669' : '#DC2626' }]}>S4: {item.status4}</Text></View>
+          )}
+        </View>
+
         {!!item.remark1 && (
           <View style={[styles.remarkBox, { backgroundColor: '#F8FAFC', borderLeftColor: '#94A3B8' }]}>
             <Text style={styles.remarkLabel}>PC Remark (Accept/Reject)</Text><Text style={[styles.remarkText, { color: Theme.colors.text }]}>💬 {item.remark1}</Text>
           </View>
         )}
+
+        {/* ✅ PROOF BUTTONS (If solver uploaded proof) */}
+        {proofUrls.length > 0 && (
+          <View style={styles.attachmentRow}>
+            {proofUrls.map((url, idx) => (
+              <TouchableOpacity key={idx} style={styles.attachmentBtn} activeOpacity={0.7} onPress={() => Platform.OS === 'web' ? window.open(url, '_blank') : Linking.openURL(url).catch(() => {})}>
+                <Ionicons name="checkmark-circle-outline" size={14} color="#1D4ED8" />
+                <Text style={styles.attachmentBtnText}>View Proof {idx + 1}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
         {!!item.remark2 && (
           <View style={[styles.remarkBox, { backgroundColor: clean(item.status2).includes('revision') || clean(item.status2).includes('pending') ? '#FFF7ED' : '#FFFBEB', borderLeftColor: '#F59E0B' }]}>
             <Text style={[styles.remarkLabel, { color: '#B45309' }]}>{(clean(item.status2).includes('revision') || clean(item.status2).includes('pending')) ? '⚠️ Solver Revision Remark' : 'Solver Remark (Solve)'}</Text>
@@ -976,7 +1089,7 @@ export default function DashboardScreen() {
             <View style={[styles.statBox, { borderTopColor: '#3B82F6' }]}><Text style={styles.statNum} numberOfLines={1}>{stats.monthRaised}</Text><Text style={styles.statLabel}>Month Raised</Text></View>
             <View style={[styles.statBox, { borderTopColor: '#10B981' }]}><Text style={styles.statNum} numberOfLines={1}>{stats.weekSolved}</Text><Text style={styles.statLabel}>Week Solved</Text></View>
             <View style={[styles.statBox, { borderTopColor: '#8B5CF6' }]}><Text style={styles.statNum} numberOfLines={1}>{stats.monthSolved}</Text><Text style={styles.statLabel}>Month Solved</Text></View>
-            <View style={[styles.statBox, { borderTopColor: '#EC4899' }]}><Text style={styles.statNum} numberOfLines={1}>{stats.weekTarget && stats.weekTarget !== '-' ? stats.weekTarget : '-'}</Text><Text style={styles.statLabel}>Week Target</Text></View>
+            <View style={[styles.statBox, { borderTopColor: '#EC4899' }]}><Text style={styles.statNum} numberOfLines={1}>{stats.weekTarget ?? stats.weekTarget === 0 ? stats.weekTarget : '-'}</Text><Text style={styles.statLabel}>Week Target</Text></View>
           </View>
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.segmentScroll} contentContainerStyle={styles.segmentScrollContent}>
@@ -1115,12 +1228,12 @@ const styles = StyleSheet.create({
   userName: { fontSize: 20, fontWeight: '800', color: Theme.colors.text },
   avatar: { width: 44, height: 44, backgroundColor: Theme.colors.primaryLight, borderRadius: 22, justifyContent: 'center', alignItems: 'center' },
   avatarText: { fontSize: 18, fontWeight: '700', color: Theme.colors.primary },
-
+  
   statsRow: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 16, marginHorizontal: -4 },
   statBox: { width: Platform.OS !== 'web' ? '47%' : undefined, flex: Platform.OS === 'web' ? 1 : undefined, minWidth: Platform.OS === 'web' ? 0 : undefined, marginHorizontal: 4, marginBottom: Platform.OS !== 'web' ? 8 : 0, backgroundColor: Theme.colors.surface, paddingVertical: 12, paddingHorizontal: 4, borderRadius: 12, borderWidth: 1, borderColor: Theme.colors.border, borderTopWidth: 4, alignItems: 'center', elevation: 1 },
   statNum: { fontSize: 22, fontWeight: '800', color: Theme.colors.text, marginBottom: 4 },
   statLabel: { fontSize: 11, fontWeight: '600', color: Theme.colors.textMuted, textAlign: 'center' },
-
+  
   segmentScroll: { marginBottom: 20 },
   segmentScrollContent: { flexDirection: 'row', backgroundColor: '#E2E8F0', padding: 4, borderRadius: 12, minWidth: '100%' },
   segmentTab: { paddingVertical: 10, paddingHorizontal: 16, alignItems: 'center', borderRadius: 10, marginRight: 4 },
@@ -1139,10 +1252,15 @@ const styles = StyleSheet.create({
   idContainer: { flexDirection: 'row', alignItems: 'center' },
   iconBox: { backgroundColor: '#F1F5F9', padding: 6, borderRadius: 8, marginRight: 8 },
   ticketId: { fontSize: 13, fontWeight: '800', color: Theme.colors.text, letterSpacing: 0.5 },
-
+  
   issueWrapper: { marginBottom: 12 },
   ticketIssue: { fontSize: 16, fontWeight: '700', color: Theme.colors.text, lineHeight: 22 },
   readMoreText: { color: Theme.colors.primary, fontSize: 13, fontWeight: '700', marginTop: 4 },
+
+  // ✅ ATTACHMENT BUTTON STYLES
+  attachmentRow: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 12, gap: 8 },
+  attachmentBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#EFF6FF', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#BFDBFE', marginRight: 8, marginBottom: 8 },
+  attachmentBtnText: { fontSize: 12, color: '#1D4ED8', fontWeight: '600', marginLeft: 6 },
 
   timeLeftBar: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#CFFAFE', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, marginBottom: 12, borderWidth: 1, borderColor: '#A5F3FC' },
   timeLeftBarOverdue: { backgroundColor: '#FEE2E2', borderColor: '#FECACA' },
@@ -1159,12 +1277,12 @@ const styles = StyleSheet.create({
   personLabel: { fontSize: 11, color: Theme.colors.textMuted, fontWeight: '600', marginBottom: 2 },
   personName: { fontSize: 12, color: Theme.colors.text, fontWeight: '700' },
   personDivider: { width: 1, height: '100%', backgroundColor: '#E2E8F0', marginHorizontal: 6 },
-
+  
   dateGrid: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 4 },
   dateCol: { flex: 1 },
   dateLabel: { fontSize: 10, color: Theme.colors.textMuted, fontWeight: '700', marginBottom: 2, textTransform: 'uppercase' },
   dateValue: { fontSize: 13, color: Theme.colors.text, fontWeight: '700' },
-
+  
   statusRow: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 10, gap: 6 },
   statusChip: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, marginRight: 6, marginBottom: 4 },
   statusChipText: { fontSize: 11, fontWeight: '700' },
